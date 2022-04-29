@@ -150,6 +150,7 @@ class MimecastCampaigns(Script):
 
             for c in campaignsResult["data"]:
                 c["sourcetype"] = "mc:api:campaigns"
+                c["api_source"] = app_id
                 cEvent = Event()
                 cEvent.stanza = input_name
                 cEvent.sourceType = "mc:api:response"
@@ -173,6 +174,7 @@ class MimecastCampaigns(Script):
                     for uD in userDataResult["data"]:
                         for u in uD["items"]:
                             u["sourcetype"] = "mc:api:userdata"
+                            u["api_source"] = app_id
                             u["campaignId"] = cId
                             u["campaignName"] = cName
                             u["launchDate"] = cLaunchDate
