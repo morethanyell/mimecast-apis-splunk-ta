@@ -4,8 +4,8 @@
     "title": "Mimecast Campaigns",
     "id": {
       "group": null,
-      "name": "TA-mimecastcampaigns",
-      "version": "1.0.0"
+      "name": "TA_mimecastcampaigns",
+      "version": "1.0.1"
     },
     "author": [
       {
