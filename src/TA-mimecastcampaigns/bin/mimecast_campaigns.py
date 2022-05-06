@@ -85,13 +85,7 @@ class MimecastCampaigns(Script):
             "data": []
         }
 
-        response = requests.post(url=url, headers=headers, data=str(payload))
-
-        if response.status_code != 200:
-            sys.exit(1)
-        data = response.json()
-
-        return data
+        return requests.post(url=url, headers=headers, data=str(payload))
 
     def get_userdata(self, _access_key, _secret_key, _app_id, _app_key, _campaignId, _pageToken):
 
@@ -132,13 +126,7 @@ class MimecastCampaigns(Script):
             ]
         }
 
-        response = requests.post(url=url, headers=headers, data=str(payload))
-
-        if response.status_code != 200:
-            sys.exit(1)
-        data = response.json()
-
-        return data
+        return requests.post(url=url, headers=headers, data=str(payload))
 
     def validate_input(self, definition):
         pass
@@ -204,6 +192,7 @@ class MimecastCampaigns(Script):
         app_key = self.input_items["app_key"]
 
         try:
+
             if access_key != self.MASK and secret_key != self.MASK and app_key != self.MASK:
                 self.encrypt_keys(access_key, secret_key,
                                   app_id, app_key, session_key)
@@ -216,49 +205,65 @@ class MimecastCampaigns(Script):
             secret_key = self.CREDENTIALS["secretKey"]
             app_key = self.CREDENTIALS["appKey"]
 
+            campaignsResult = self.get_campaigns(
+                access_key, secret_key, app_id, app_key)
+
+            status_code = campaignsResult.status_code
+
+            if status_code != 200:
+                ew.log("ERROR", "Unsuccessful HTTP request for `Campaigns` endpoint. status_code=: %s" % str(status_code))
+                sys.exit(1)
+
+            campaingsJson = campaignsResult.json()
+
+            for c in campaingsJson["data"]:
+                c["sourcetype"] = "mc:api:campaigns"
+                c["api_source"] = app_id
+                cEvent = Event()
+                cEvent.stanza = self.input_name
+                cEvent.sourceType = "mc:api:response"
+                cEvent.data = json.dumps(c)
+                ew.write_event(cEvent)
+
+                cId = c["id"]
+                cName = c["name"]
+                cLaunchDate = c["launchDate"]
+
+                nextPage = ""
+
+                while nextPage != "n/a":
+
+                    userDataResult = self.get_userdata(
+                        access_key, secret_key, app_id, app_key, cId, nextPage)
+
+                    status_code = userDataResult.status_code
+
+                    if status_code != 200:
+                        ew.log("ERROR", "Unsuccessful HTTP request for `User Data` endpoint. status_code=: %s" % str(status_code))
+                        sys.exit(1)
+
+                    userDataResult = userDataResult.json()
+
+                    if "next" in userDataResult["meta"]["pagination"]:
+                        nextPage = userDataResult["meta"]["pagination"]["next"]
+                    else:
+                        nextPage = "n/a"
+
+                    for uD in userDataResult["data"]:
+                        for u in uD["items"]:
+                            u["sourcetype"] = "mc:api:userdata"
+                            u["api_source"] = app_id
+                            u["campaignId"] = cId
+                            u["campaignName"] = cName
+                            u["launchDate"] = cLaunchDate
+                            uEvent = Event()
+                            uEvent.stanza = self.input_name
+                            uEvent.sourceType = "mc:api:response"
+                            uEvent.data = json.dumps(u)
+                            ew.write_event(uEvent)
+
         except Exception as e:
             ew.log("ERROR", "Error: %s" % str(e))
-
-        campaignsResult = self.get_campaigns(
-            access_key, secret_key, app_id, app_key)
-
-        for c in campaignsResult["data"]:
-            c["sourcetype"] = "mc:api:campaigns"
-            c["api_source"] = app_id
-            cEvent = Event()
-            cEvent.stanza = self.input_name
-            cEvent.sourceType = "mc:api:response"
-            cEvent.data = json.dumps(c)
-            ew.write_event(cEvent)
-
-            cId = c["id"]
-            cName = c["name"]
-            cLaunchDate = c["launchDate"]
-
-            nextPage = ""
-
-            while nextPage != "n/a":
-
-                userDataResult = self.get_userdata(
-                    access_key, secret_key, app_id, app_key, cId, nextPage)
-
-                if "next" in userDataResult["meta"]["pagination"]:
-                    nextPage = userDataResult["meta"]["pagination"]["next"]
-                else:
-                    nextPage = "n/a"
-
-                for uD in userDataResult["data"]:
-                    for u in uD["items"]:
-                        u["sourcetype"] = "mc:api:userdata"
-                        u["api_source"] = app_id
-                        u["campaignId"] = cId
-                        u["campaignName"] = cName
-                        u["launchDate"] = cLaunchDate
-                        uEvent = Event()
-                        uEvent.stanza = self.input_name
-                        uEvent.sourceType = "mc:api:response"
-                        uEvent.data = json.dumps(u)
-                        ew.write_event(uEvent)
 
 
 if __name__ == "__main__":
