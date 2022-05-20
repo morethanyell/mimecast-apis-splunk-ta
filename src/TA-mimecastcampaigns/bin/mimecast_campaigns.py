@@ -14,7 +14,7 @@ import splunklib.client as client
 
 class MimecastCampaigns(Script):
 
-    MASK = "***<encrypted>***"
+    MASK = "***ENCRYPTED***"
     CREDENTIALS = None
 
     def get_scheme(self):
@@ -150,14 +150,14 @@ class MimecastCampaigns(Script):
         except Exception as e:
             raise Exception("Error encrypting: %s" % str(e))
 
-    def mask_credentials(self, input_name, _app_id, session_key):
+    def mask_credentials(self, _input_name, _app_id, _session_key):
 
         try:
-            args = {'token': session_key}
+            args = {'token': _session_key}
             service = client.connect(**args)
 
-            kind, input_name = input_name.split("://")
-            item = service.inputs.__getitem__((input_name, kind))
+            kind, _input_name = _input_name.split("://")
+            item = service.inputs.__getitem__((_input_name, kind))
 
             kwargs = {
                 "access_key": self.MASK,
@@ -183,7 +183,6 @@ class MimecastCampaigns(Script):
     def stream_events(self, inputs, ew):
         
         start = time.time()
-        
         presult = ""
         
         self.input_name, self.input_items = inputs.inputs.popitem()
@@ -276,7 +275,7 @@ class MimecastCampaigns(Script):
                             uEvent.data = json.dumps(u)
                             ew.write_event(uEvent)
                     
-                ew.log("INFO", f'Successful API call for `User Data` endpoint. Successfully written user-data events for campaign {str(campaign_ctr)} of {str(total_campaigns)}, total_pages={str(page_ctr)}')
+                ew.log("INFO", f'Successfully written user-data events for campaign {str(campaign_ctr)} of {str(total_campaigns)}, total_pages={str(page_ctr)}')
 
             presult = "completed"
         
@@ -286,7 +285,7 @@ class MimecastCampaigns(Script):
         
         end = time.time()
         elapsed = round((end - start) * 1000, 2)
-        ew.log("INFO", f'Process {presult} in {str(elapsed)} ms. input_name="{self.input_name}"')
+        ew.log("INFO", f'Process {presult} in {str(elapsed)} ms. input_name="{self.input_name}')
 
 
 if __name__ == "__main__":
