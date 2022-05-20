@@ -3,9 +3,11 @@ import json
 import requests
 import base64
 import hashlib
+import time
 import hmac
 import uuid
 import datetime
+import socket
 from splunklib.modularinput import *
 import splunklib.client as client
 
@@ -69,8 +71,7 @@ class MimecastCampaigns(Script):
         request_id = str(uuid.uuid4())
         hdr_date = datetime.datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S") + " UTC"
         dataToSign = ':'.join([hdr_date, request_id, uri, app_key])
-        hmac_sha1 = hmac.new(base64.b64decode(
-            secret_key), dataToSign.encode(), digestmod=hashlib.sha1).digest()
+        hmac_sha1 = hmac.new(base64.b64decode(secret_key), dataToSign.encode(), digestmod=hashlib.sha1).digest()
         sig = base64.b64encode(hmac_sha1).rstrip()
 
         headers = {
@@ -100,8 +101,7 @@ class MimecastCampaigns(Script):
         request_id = str(uuid.uuid4())
         hdr_date = datetime.datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S") + " UTC"
         dataToSign = ':'.join([hdr_date, request_id, uri, app_key])
-        hmac_sha1 = hmac.new(base64.b64decode(
-            secret_key), dataToSign.encode(), digestmod=hashlib.sha1).digest()
+        hmac_sha1 = hmac.new(base64.b64decode(secret_key), dataToSign.encode(), digestmod=hashlib.sha1).digest()
         sig = base64.b64encode(hmac_sha1).rstrip()
 
         headers = {
@@ -125,7 +125,7 @@ class MimecastCampaigns(Script):
                 }
             ]
         }
-
+        
         return requests.post(url=url, headers=headers, data=str(payload))
 
     def validate_input(self, definition):
@@ -136,8 +136,7 @@ class MimecastCampaigns(Script):
         args = {'token': _session_key}
         service = client.connect(**args)
 
-        credentials = {"accessKey": _access_key,
-                       "secretKey": _secret_key, "appId": _app_id, "appKey": _app_key}
+        credentials = {"accessKey": _access_key, "secretKey": _secret_key, "appId": _app_id, "appKey": _app_key}
 
         try:
             for storage_password in service.storage_passwords:
@@ -182,7 +181,11 @@ class MimecastCampaigns(Script):
                 return storage_password.content.clear_password
 
     def stream_events(self, inputs, ew):
-
+        
+        start = time.time()
+        
+        presult = ""
+        
         self.input_name, self.input_items = inputs.inputs.popitem()
         session_key = self._input_definition.metadata["session_key"]
 
@@ -194,8 +197,7 @@ class MimecastCampaigns(Script):
         try:
 
             if access_key != self.MASK and secret_key != self.MASK and app_key != self.MASK:
-                self.encrypt_keys(access_key, secret_key,
-                                  app_id, app_key, session_key)
+                self.encrypt_keys(access_key, secret_key, app_id, app_key, session_key)
                 self.mask_credentials(self.input_name, app_id, session_key)
 
             decrypted = self.decrypt_keys(app_id, session_key)
@@ -205,20 +207,27 @@ class MimecastCampaigns(Script):
             secret_key = self.CREDENTIALS["secretKey"]
             app_key = self.CREDENTIALS["appKey"]
 
-            campaignsResult = self.get_campaigns(
-                access_key, secret_key, app_id, app_key)
+            campaignsResult = self.get_campaigns(access_key, secret_key, app_id, app_key)
+            
+            apiScriptHost = socket.gethostname()
 
             status_code = campaignsResult.status_code
 
             if status_code != 200:
                 ew.log("ERROR", "Unsuccessful HTTP request for `Campaigns` endpoint. status_code=: %s" % str(status_code))
                 sys.exit(1)
-
+            
             campaingsJson = campaignsResult.json()
+            
+            total_campaigns = len(campaingsJson["data"])
+            campaign_ctr = 0
+            
+            ew.log("INFO", f'Successful API call for `Campaigns` endpoint. Result: {str(total_campaigns)} campaign(s)')
 
             for c in campaingsJson["data"]:
                 c["sourcetype"] = "mc:api:campaigns"
-                c["api_source"] = app_id
+                c["apiSourceAppId"] = app_id
+                c["apiScriptHost"] = apiScriptHost
                 cEvent = Event()
                 cEvent.stanza = self.input_name
                 cEvent.sourceType = "mc:api:response"
@@ -228,13 +237,15 @@ class MimecastCampaigns(Script):
                 cId = c["id"]
                 cName = c["name"]
                 cLaunchDate = c["launchDate"]
+                
+                campaign_ctr = campaign_ctr + 1
+                page_ctr = 0
 
                 nextPage = ""
 
                 while nextPage != "n/a":
 
-                    userDataResult = self.get_userdata(
-                        access_key, secret_key, app_id, app_key, cId, nextPage)
+                    userDataResult = self.get_userdata(access_key, secret_key, app_id, app_key, cId, nextPage)
 
                     status_code = userDataResult.status_code
 
@@ -243,16 +254,19 @@ class MimecastCampaigns(Script):
                         sys.exit(1)
 
                     userDataResult = userDataResult.json()
-
+                    
+                    page_ctr = page_ctr + 1
+                    
                     if "next" in userDataResult["meta"]["pagination"]:
                         nextPage = userDataResult["meta"]["pagination"]["next"]
                     else:
                         nextPage = "n/a"
-
+                    
                     for uD in userDataResult["data"]:
                         for u in uD["items"]:
                             u["sourcetype"] = "mc:api:userdata"
-                            u["api_source"] = app_id
+                            u["apiSourceAppId"] = app_id
+                            u["apiScriptHost"] = apiScriptHost
                             u["campaignId"] = cId
                             u["campaignName"] = cName
                             u["launchDate"] = cLaunchDate
@@ -261,9 +275,18 @@ class MimecastCampaigns(Script):
                             uEvent.sourceType = "mc:api:response"
                             uEvent.data = json.dumps(u)
                             ew.write_event(uEvent)
+                    
+                ew.log("INFO", f'Successful API call for `User Data` endpoint. Successfully written user-data events for campaign {str(campaign_ctr)} of {str(total_campaigns)}, total_pages={str(page_ctr)}')
 
+            presult = "completed"
+        
         except Exception as e:
+            presult = "failed"
             ew.log("ERROR", "Error: %s" % str(e))
+        
+        end = time.time()
+        elapsed = round((end - start) * 1000, 2)
+        ew.log("INFO", f'Process {presult} in {str(elapsed)} ms. input_name="{self.input_name}"')
 
 
 if __name__ == "__main__":
