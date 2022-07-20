@@ -27,7 +27,7 @@ class MimecastCampaigns(Script):
         grid_url = Argument("grid_url")
         grid_url.title = "Tenant or Grid URL"
         grid_url.data_type = Argument.data_type_string
-        grid_url.description = "Mimecast Grid API URL"
+        grid_url.description = "Mimecast Grid API URL. E.g.: https://de-api.mimecast.com"
         grid_url.required_on_create = True
         grid_url.required_on_edit = True
         scheme.add_argument(grid_url)
@@ -158,7 +158,7 @@ class MimecastCampaigns(Script):
         except Exception as e:
             raise Exception("Error encrypting: %s" % str(e))
 
-    def mask_credentials(self, _input_name, _app_id, _session_key):
+    def mask_credentials(self, _input_name, _grid_url, _app_id, _session_key):
 
         try:
             args = {'token': _session_key}
@@ -168,6 +168,7 @@ class MimecastCampaigns(Script):
             item = service.inputs.__getitem__((_input_name, kind))
 
             kwargs = {
+                "grid_url": _grid_url,
                 "access_key": self.MASK,
                 "secret_key": self.MASK,
                 "app_id": _app_id,
@@ -202,11 +203,13 @@ class MimecastCampaigns(Script):
         app_id = self.input_items["app_id"]
         app_key = self.input_items["app_key"]
 
+        ew.log("INFO", f'Collecting Mimecast API logs from grid: {str(grid_url)}')
+
         try:
 
             if access_key != self.MASK and secret_key != self.MASK and app_key != self.MASK:
                 self.encrypt_keys(access_key, secret_key, app_id, app_key, session_key)
-                self.mask_credentials(self.input_name, app_id, session_key)
+                self.mask_credentials(self.input_name, grid_url, app_id, session_key)
 
             decrypted = self.decrypt_keys(app_id, session_key)
             self.CREDENTIALS = json.loads(decrypted)
@@ -296,7 +299,7 @@ class MimecastCampaigns(Script):
         
         end = time.time()
         elapsed = round((end - start) * 1000, 2)
-        ew.log("INFO", f'Process {presult} in {str(elapsed)} ms. input_name="{self.input_name}')
+        ew.log("INFO", f'Process {presult} in {str(elapsed)} ms. input_name="{self.input_name}"')
 
 
 if __name__ == "__main__":
