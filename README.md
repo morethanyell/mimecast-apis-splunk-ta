@@ -22,5 +22,5 @@ For more details about the API, visit https://integrations.mimecast.com/document
 - For each Mimecast Phising Campaign
 	- Get Mimecast Campaign ID
 		- Using the Campaign ID, get the User Data
-			- For each stream (ingest) each JSON data as single event in Splunk
+			- For each user as JSON item, stream (ingest) as single event to Splunk
 				- Do above until all pages are exhausted
