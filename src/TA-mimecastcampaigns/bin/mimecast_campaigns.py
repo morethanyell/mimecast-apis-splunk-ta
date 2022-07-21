@@ -24,6 +24,14 @@ class MimecastCampaigns(Script):
         scheme.use_single_instance = False
         scheme.description = "Campaigns API Credentials"
 
+        grid_url = Argument("grid_url")
+        grid_url.title = "Tenant or Grid URL"
+        grid_url.data_type = Argument.data_type_string
+        grid_url.description = "Mimecast Grid API URL. E.g.: https://de-api.mimecast.com"
+        grid_url.required_on_create = True
+        grid_url.required_on_edit = True
+        scheme.add_argument(grid_url)
+
         access_key = Argument("access_key")
         access_key.title = "Access Key"
         access_key.data_type = Argument.data_type_string
@@ -58,9 +66,9 @@ class MimecastCampaigns(Script):
 
         return scheme
 
-    def get_campaigns(self, _access_key, _secret_key, _app_id, _app_key):
+    def get_campaigns(self, _grid_url, _access_key, _secret_key, _app_id, _app_key):
 
-        base_url = "https://de-api.mimecast.com"
+        base_url = _grid_url
         uri = "/api/awareness-training/phishing/campaign/get-campaign"
         url = base_url + uri
         access_key = _access_key
@@ -88,9 +96,9 @@ class MimecastCampaigns(Script):
 
         return requests.post(url=url, headers=headers, data=str(payload))
 
-    def get_userdata(self, _access_key, _secret_key, _app_id, _app_key, _campaignId, _pageToken):
+    def get_userdata(self, _grid_url, _access_key, _secret_key, _app_id, _app_key, _campaignId, _pageToken):
 
-        base_url = "https://de-api.mimecast.com"
+        base_url = _grid_url
         uri = "/api/awareness-training/phishing/campaign/get-user-data"
         url = base_url + uri
         access_key = _access_key
@@ -150,7 +158,7 @@ class MimecastCampaigns(Script):
         except Exception as e:
             raise Exception("Error encrypting: %s" % str(e))
 
-    def mask_credentials(self, _input_name, _app_id, _session_key):
+    def mask_credentials(self, _input_name, _grid_url, _app_id, _session_key):
 
         try:
             args = {'token': _session_key}
@@ -160,6 +168,7 @@ class MimecastCampaigns(Script):
             item = service.inputs.__getitem__((_input_name, kind))
 
             kwargs = {
+                "grid_url": _grid_url,
                 "access_key": self.MASK,
                 "secret_key": self.MASK,
                 "app_id": _app_id,
@@ -188,16 +197,19 @@ class MimecastCampaigns(Script):
         self.input_name, self.input_items = inputs.inputs.popitem()
         session_key = self._input_definition.metadata["session_key"]
 
+        grid_url = self.input_items["grid_url"]
         access_key = self.input_items["access_key"]
         secret_key = self.input_items["secret_key"]
         app_id = self.input_items["app_id"]
         app_key = self.input_items["app_key"]
 
+        ew.log("INFO", f'Collecting Mimecast API logs from grid: {str(grid_url)}')
+
         try:
 
             if access_key != self.MASK and secret_key != self.MASK and app_key != self.MASK:
                 self.encrypt_keys(access_key, secret_key, app_id, app_key, session_key)
-                self.mask_credentials(self.input_name, app_id, session_key)
+                self.mask_credentials(self.input_name, grid_url, app_id, session_key)
 
             decrypted = self.decrypt_keys(app_id, session_key)
             self.CREDENTIALS = json.loads(decrypted)
@@ -206,7 +218,7 @@ class MimecastCampaigns(Script):
             secret_key = self.CREDENTIALS["secretKey"]
             app_key = self.CREDENTIALS["appKey"]
 
-            campaignsResult = self.get_campaigns(access_key, secret_key, app_id, app_key)
+            campaignsResult = self.get_campaigns(grid_url, access_key, secret_key, app_id, app_key)
             
             apiScriptHost = socket.gethostname()
 
@@ -224,6 +236,7 @@ class MimecastCampaigns(Script):
             ew.log("INFO", f'Successful API call for `Campaigns` endpoint. Result: {str(total_campaigns)} campaign(s)')
 
             for c in campaingsJson["data"]:
+                c["gridUrl"] = grid_url
                 c["sourcetype"] = "mc:api:campaigns"
                 c["apiSourceAppId"] = app_id
                 c["apiScriptHost"] = apiScriptHost
@@ -244,7 +257,7 @@ class MimecastCampaigns(Script):
 
                 while nextPage != "n/a":
 
-                    userDataResult = self.get_userdata(access_key, secret_key, app_id, app_key, cId, nextPage)
+                    userDataResult = self.get_userdata(grid_url, access_key, secret_key, app_id, app_key, cId, nextPage)
 
                     status_code = userDataResult.status_code
 
@@ -263,6 +276,7 @@ class MimecastCampaigns(Script):
                     
                     for uD in userDataResult["data"]:
                         for u in uD["items"]:
+                            u["gridUrl"] = grid_url
                             u["sourcetype"] = "mc:api:userdata"
                             u["apiSourceAppId"] = app_id
                             u["apiScriptHost"] = apiScriptHost
@@ -285,7 +299,7 @@ class MimecastCampaigns(Script):
         
         end = time.time()
         elapsed = round((end - start) * 1000, 2)
-        ew.log("INFO", f'Process {presult} in {str(elapsed)} ms. input_name="{self.input_name}')
+        ew.log("INFO", f'Process {presult} in {str(elapsed)} ms. input_name="{self.input_name}"')
 
 
 if __name__ == "__main__":
