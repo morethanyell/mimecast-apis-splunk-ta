@@ -7,6 +7,7 @@ import time
 import hmac
 import uuid
 import datetime
+import math
 import socket
 from splunklib.modularinput import *
 import splunklib.client as client
@@ -63,6 +64,14 @@ class MimecastCampaigns(Script):
         app_key.required_on_create = True
         app_key.required_on_edit = True
         scheme.add_argument(app_key)
+        
+        launch_date = Argument("launch_date")
+        launch_date.title = "Launched Date"
+        launch_date.data_type = Argument.data_type_string
+        launch_date.description = "Retrieve results for campaigns launched since this date (at least one second earlier). Must use the format YYYY-mm-ddTHH:MM:SS+0000"
+        launch_date.required_on_create = True
+        launch_date.required_on_edit = False
+        scheme.add_argument(launch_date)
 
         return scheme
 
@@ -202,11 +211,18 @@ class MimecastCampaigns(Script):
         secret_key = self.input_items["secret_key"]
         app_id = self.input_items["app_id"]
         app_key = self.input_items["app_key"]
+        launch_date = self.input_items["launch_date"]
 
         ew.log("INFO", f'Collecting Mimecast API logs from grid: {str(grid_url)}')
+        
+        try:
+            launch_date_epoch = datetime.datetime.strptime(launch_date, '%Y-%m-%dT%H:%M:%S%z')
+        except ValueError:
+            ew.log("ERROR", "Launch. status_code=: %s" % str(status_code))
+            sys.exit(1)
 
         try:
-
+            
             if access_key != self.MASK and secret_key != self.MASK and app_key != self.MASK:
                 self.encrypt_keys(access_key, secret_key, app_id, app_key, session_key)
                 self.mask_credentials(self.input_name, grid_url, app_id, session_key)
@@ -249,6 +265,12 @@ class MimecastCampaigns(Script):
                 cId = c["id"]
                 cName = c["name"]
                 cLaunchDate = c["launchDate"]
+                
+                cLaunchDate_parse = datetime.datetime.strptime(cLaunchDate, '%Y-%m-%dT%H:%M:%S%z')
+                
+                if cLaunchDate_parse < launch_date_epoch:
+                    ew.log("INFO", f'Skipped {cName} due to launchDate value is less than desired launchDate.')
+                    continue
                 
                 campaign_ctr = campaign_ctr + 1
                 page_ctr = 0
