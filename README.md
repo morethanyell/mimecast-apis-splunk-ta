@@ -5,12 +5,13 @@ This TA allows Splunk administrators to ingest or onboard data from Mimecast Awa
 To configure an input after installing this app, go to Settings > Data Inputs > Mimecast Awareness Training - Campaigns  
 You will need to supply the the following:  
 - Grid or Tenant API URL  
-- Access Key  
-- Secret Key  
-- App Id  
-- App Key  
+- Access Key
+- Secret Key
+- App Id
+- App Key
+- Launch Date
   
-Once the abovementioned credentials have been entered, click on More Settings and select your index and interval. Since this API endpoint returns data that do not change a lot, it is recommended to set a wide interval, such as "every 12 hours".  
+Once the abovementioned credentials have been entered, click on More Settings and select your index and interval. Since this API endpoint returns data that do not change a lot, it is recommended to set a wide interval, such as "every 12 hours". This TA will only index events that are greater than the desired Launch Date.
   
 NOTE: Do not change the `sourcetype` as there's a renaming that happens in the background / parsing phase.  
   
