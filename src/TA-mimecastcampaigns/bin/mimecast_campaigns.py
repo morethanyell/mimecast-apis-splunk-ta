@@ -242,7 +242,7 @@ class MimecastCampaigns(Script):
         current_datetime = datetime.datetime.now(campaign_end_date_epoch.tzinfo)
         
         if campaign_end_date_epoch < current_datetime:
-            ew.log("INFO", f"Campaign {campaign_parent_name} has concluded.")
+            ew.log("INFO", f"{campaign_parent_name} has concluded.")
             sys.exit(1)
 
         try:
