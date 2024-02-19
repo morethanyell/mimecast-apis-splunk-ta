@@ -7,7 +7,6 @@ import time
 import hmac
 import uuid
 import datetime
-import math
 import socket
 from splunklib.modularinput import *
 import splunklib.client as client
@@ -65,6 +64,14 @@ class MimecastCampaigns(Script):
         app_key.required_on_edit = True
         scheme.add_argument(app_key)
         
+        campaign_parent_name = Argument("campaign_parent_name")
+        campaign_parent_name.title = "Campaign Parent Name"
+        campaign_parent_name.data_type = Argument.data_type_string
+        campaign_parent_name.description = "Gives a name to this campaign. E.g.: Q3 Phishing Simulation - Confirm iPhone 15 Pro Amazon Order"
+        campaign_parent_name.required_on_create = True
+        campaign_parent_name.required_on_edit = False
+        scheme.add_argument(campaign_parent_name)
+        
         launch_date = Argument("launch_date")
         launch_date.title = "Launched Date"
         launch_date.data_type = Argument.data_type_string
@@ -72,6 +79,14 @@ class MimecastCampaigns(Script):
         launch_date.required_on_create = True
         launch_date.required_on_edit = False
         scheme.add_argument(launch_date)
+        
+        campaign_end_date = Argument("campaign_end_date")
+        campaign_end_date.title = "Campaign End Date"
+        campaign_end_date.data_type = Argument.data_type_string
+        campaign_end_date.description = "Stops retrieving data after this date. Must use the format YYYY-mm-ddTHH:MM:SS+0000"
+        campaign_end_date.required_on_create = True
+        campaign_end_date.required_on_edit = False
+        scheme.add_argument(campaign_end_date)
 
         return scheme
 
@@ -211,14 +226,23 @@ class MimecastCampaigns(Script):
         secret_key = self.input_items["secret_key"]
         app_id = self.input_items["app_id"]
         app_key = self.input_items["app_key"]
+        campaign_parent_name = self.input_items["campaign_parent_name"]
         launch_date = self.input_items["launch_date"]
+        campaign_end_date = self.input_items["campaign_end_date"]
 
-        ew.log("INFO", f'Collecting Mimecast API logs from grid: {str(grid_url)}')
+        ew.log("INFO", f'Collecting Mimecast API logs from grid: {str(grid_url)}. Campaign Name: {campaign_parent_name}')
         
         try:
             launch_date_epoch = datetime.datetime.strptime(launch_date, '%Y-%m-%dT%H:%M:%S%z')
+            campaign_end_date_epoch = datetime.datetime.strptime(campaign_end_date, '%Y-%m-%dT%H:%M:%S%z')
         except ValueError:
-            ew.log("ERROR", "Launch. status_code=: %s" % str(status_code))
+            ew.log("ERROR", f"Parsing Launch Date '{launch_date}' or Campaign End Date '{campaign_end_date}' failed.")
+            sys.exit(1)
+            
+        current_datetime = datetime.datetime.now(campaign_end_date_epoch.tzinfo)
+        
+        if campaign_end_date_epoch < current_datetime:
+            ew.log("INFO", f"Campaign {campaign_parent_name} has concluded.")
             sys.exit(1)
 
         try:
@@ -269,7 +293,7 @@ class MimecastCampaigns(Script):
                 cLaunchDate_parse = datetime.datetime.strptime(cLaunchDate, '%Y-%m-%dT%H:%M:%S%z')
                 
                 if cLaunchDate_parse < launch_date_epoch:
-                    ew.log("INFO", f'Skipped {cName} due to launchDate value is less than desired launchDate.')
+                    ew.log("INFO", f'Skipped {cName} because this campaign was launched before {launch_date_epoch}.')
                     continue
                 
                 campaign_ctr = campaign_ctr + 1
@@ -284,7 +308,7 @@ class MimecastCampaigns(Script):
                     status_code = userDataResult.status_code
 
                     if status_code != 200:
-                        ew.log("ERROR", "Unsuccessful HTTP request for `User Data` endpoint. status_code=: %s" % str(status_code))
+                        ew.log("ERROR", f"Unsuccessful HTTP request for `User Data` endpoint. status_code={str(status_code)}")
                         sys.exit(1)
 
                     userDataResult = userDataResult.json()
@@ -304,7 +328,9 @@ class MimecastCampaigns(Script):
                             u["apiScriptHost"] = apiScriptHost
                             u["campaignId"] = cId
                             u["campaignName"] = cName
+                            u["campaign"] = campaign_parent_name
                             u["launchDate"] = cLaunchDate
+                            u["campaignEndDate"] = campaign_end_date
                             uEvent = Event()
                             uEvent.stanza = self.input_name
                             uEvent.sourceType = "mc:api:response"
