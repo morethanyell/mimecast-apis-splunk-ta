@@ -3,6 +3,9 @@
 ## Overview
 This TA collects data from Mimecast Awareness Training API, specifically the "Get Campaigns" and "Get User Data" endpoints.  
 
+## Releases
+Version 2.0.0 was released on 19 July 2024. It is now built on top of Splunk Add-on Builder.
+
 ## Requirements and Configuration
 To configure an input after installing this app, go to the app's Inputs landing page and hit Create New Input. You will need to supply the the following:  
 - Grid or Tenant API URL  
