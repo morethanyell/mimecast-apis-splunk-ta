@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "2.0.0",
   "info": {
     "title": "Mimecast Campaigns",
     "id": {
       "group": null,
       "name": "TA-mimecastcampaigns",
-      "version": "1.6.0"
+      "version": "2.0.0"
     },
     "author": [
       {
@@ -15,7 +15,7 @@
       }
     ],
     "releaseDate": null,
-    "description": "Utilizes Mimecast Awareness Training API to pull data Campaigns data",
+    "description": "Utilizes Mimecast Awareness Training API to pull data Campaigns / Phishing Simulation results data",
     "classification": {
       "intendedAudience": null,
       "categories": [],
@@ -49,5 +49,11 @@
     "splunk": {
       "Enterprise": "*"
     }
-  }
+  },
+  "supportedDeployments": [
+    "*"
+  ],
+  "targetWorkloads": [
+    "*"
+  ]
 }
